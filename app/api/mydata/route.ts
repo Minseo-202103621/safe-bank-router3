@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 
 /* ============== 타입 ============== */
 type Account = {
@@ -10,9 +8,9 @@ type Account = {
   type: "demand" | "term" | "fx_deposit" | "trust_protected" | "investment";
   currency: "KRW" | "USD" | string;
   balance: number;                  // 금액(랜덤 생성)
-  fxRate?: number;                  // USD일 때 환율
-  term?: number;                    // 정기예금 등 만기(월)
-  product_name?: string;            // 실제 상품명(또는 비보호 가짜명)
+  fxRate?: number;                   // USD일 때 환율
+  term?: number;                     // 정기예금 등 만기(월)
+  product_name?: string;             // 실제 상품명(또는 비보호 가짜명)
 };
 
 /* ============== 유틸 ============== */
@@ -50,25 +48,22 @@ function inferTypeFromProduct(name: string): Exclude<Account["type"], "investmen
   if (/(입출금|보통예금|보통|자유입출금|수시입출금|통장|급여|월급|체크)/.test(n)) return "demand";
   if (/(외화|달러|USD|미국달러)/i.test(n)) return "fx_deposit";
   if (/(금전신탁|원본보전|신탁)/.test(n)) return "trust_protected";
-  // KDIC 목록은 보호대상만이므로 기본도 보호군으로
   return "demand";
 }
 function inferCurrency(name: string): "KRW" | "USD" {
   return /(외화|달러|USD|미국달러)/i.test(name) ? "USD" : "KRW";
 }
 
-/* ============== KDIC 카탈로그 로딩 ============== */
-async function loadCatalogFromCsv(): Promise<{ institution: string; product_name: string }[]> {
-  const fromEnv = process.env.CATALOG_CSV
-    ? (path.isAbsolute(process.env.CATALOG_CSV)
-        ? process.env.CATALOG_CSV
-        : path.join(process.cwd(), process.env.CATALOG_CSV))
-    : null;
+/* ============== KDIC 카탈로그 로딩 (fs -> fetch로 변경) ============== */
+async function loadCatalogFromCsv(origin: string): Promise<{ institution: string; product_name: string }[]> {
+  const csvUrl = `${origin}/data/KDIC_예금자보호_금융상품_전체목록.csv`;
+  const res = await fetch(csvUrl, { cache: "no-store" });
+  if (!res.ok) {
+    console.error(`Failed to fetch CSV: ${res.status}`);
+    return [];
+  }
 
-  const filePath =
-    fromEnv ?? path.join(process.cwd(), "data", "KDIC_예금자보호_금융상품_전체목록.csv");
-
-  const raw = await fs.readFile(filePath, "utf8");
+  const raw = await res.text();
   const rows = parseCsv(raw);
   if (!rows.length) return [];
 
@@ -94,7 +89,7 @@ const NON_PROTECTED_FIXED: { institution: string; product_name: string }[] = [
   { institution: "KB증권", product_name: "KB 해외채권 DLS 9M" },
 ];
 
-/* ============== 모의 계좌 생성기 ============== */
+/* ============== 모의 계좌 생성기 (기존 로직 유지) ============== */
 function generateProtectedFromCatalog(
   catalog: { institution: string; product_name: string }[],
   count: number
@@ -110,7 +105,7 @@ function generateProtectedFromCatalog(
   const arr: Account[] = [];
   for (let i = 0; i < count; i++) {
     const { institution, product_name } = pick();
-    const type = inferTypeFromProduct(product_name);        // 보호군만
+    const type = inferTypeFromProduct(product_name);
     const currency = inferCurrency(product_name);
     let balance: number, fxRate: number | undefined, term: number | undefined;
 
@@ -153,14 +148,14 @@ function generateNonProtectedFixed(count = 3): Account[] {
       type: "investment",
       currency: "KRW",
       balance: rnd(KR.investment[0], KR.investment[1]),
-      product_name: src.product_name, // KDIC에 없으므로 매칭 실패 → 비보호
+      product_name: src.product_name,
     });
   }
   return arr;
 }
 
-/* ============== 핸들러 ============== */
-export async function GET() {
+/* ============== 핸들러 (수정된 loadCatalogFromCsv 호출) ============== */
+export async function GET(req: Request) {
   try {
     const useMock = (process.env.USE_MOCK_MYDATA ?? "true").toLowerCase() === "true";
 
@@ -173,8 +168,8 @@ export async function GET() {
       return NextResponse.json(Array.isArray(j) ? j : (Array.isArray(j?.accounts) ? j.accounts : []), { status: 200 });
     }
 
-    // 모의: KDIC CSV 기반 보호 상품 + 비보호 고정 샘플
-    const catalog = await loadCatalogFromCsv();
+    const origin = new URL(req.url).origin;
+    const catalog = await loadCatalogFromCsv(origin); // origin 전달
     if (!catalog.length) return NextResponse.json([], { status: 200 });
 
     const protectedCnt = Math.max(0, Number(process.env.MOCK_PROTECTED_COUNT ?? 10));
@@ -183,7 +178,8 @@ export async function GET() {
     const nonProtectedAcc = generateNonProtectedFixed(nonProtectedCnt);
 
     return NextResponse.json([...protectedAcc, ...nonProtectedAcc], { status: 200 });
-  } catch {
+  } catch (e) {
+    console.error("Error in mydata route:", e);
     return NextResponse.json([], { status: 200 });
   }
 }

@@ -1,11 +1,6 @@
-
 import { NextResponse } from "next/server";
-import { parse } from "node:path";
-import fs from "fs";
-import path from "path";
 
 const SERVICE_KEY = process.env.KDIC_SERVICE_KEY ?? "";
-
 const PRODUCT_URL = "https://apis.data.go.kr/B190017/service/GetInsuredProductService202008/getProductList202008";
 
 type Item = { [k: string]: any };
@@ -55,22 +50,15 @@ async function fetchPage(pageNo = 1, numOfRows = 500) {
   const res = await fetch(url, { cache: "no-store" });
 
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-  // Try JSON first
-  try {
-    const j = await res.json();
-    const { items } = extractFromJson(j);
-    const parsed = items.map((it: any) => ({
-      금융회사명: it?.fncIstNm ?? null,
-      금융상품명: it?.prdNm ?? null,
-      상품판매중단일자: it?.prdSalDscnDt ?? null,
-      등록일: it?.regDate ?? null,
-    }));
-    return parsed as any[];
-  } catch {
-    // Fallback to text (XML) not implemented here; API is expected to support JSON when resultType=json
-    throw new Error("JSON parse failed");
-  }
+  
+  const j = await res.json();
+  const { items } = extractFromJson(j);
+  return items.map((it: any) => ({
+    금융회사명: it?.fncIstNm ?? null,
+    금융상품명: it?.prdNm ?? null,
+    상품판매중단일자: it?.prdSalDscnDt ?? null,
+    등록일: it?.regDate ?? null,
+  }));
 }
 
 async function fetchAll() {
@@ -78,7 +66,7 @@ async function fetchAll() {
   const all: any[] = [];
   let page = 1;
   const rows = 500;
-  for (let i=0; i<50; i++) { // safety cap
+  for (let i = 0; i < 50; i++) { // safety cap
     const items = await fetchPage(page, rows);
     if (!items.length) break;
     all.push(...items);
@@ -88,47 +76,45 @@ async function fetchAll() {
   return all;
 }
 
-function readCsvFallback(): any[] {
-  try {
-    const csvPath = path.join(process.cwd(), "data", "KDIC_예금자보호_금융상품_전체목록.csv");
-    if (!fs.existsSync(csvPath)) return [];
-    const raw = fs.readFileSync(csvPath, "utf-8");
-    const lines = raw.split(/[\r\n]+/).filter(Boolean);
-    if (!lines.length) return [];
-    const headers = lines[0].split(",");
-    const idx = {
-      금융회사명: headers.indexOf("금융회사명"),
-      금융상품명: headers.indexOf("금융상품명"),
-      상품판매중단일자: headers.indexOf("상품판매중단일자"),
-      등록일: headers.indexOf("등록일"),
-    };
-    const rows: any[] = [];
-    for (let i=1;i<lines.length;i++){
-      const cols = lines[i].split(",");
-      rows.push({
-        금융회사명: idx.금융회사명 >=0 ? cols[idx.금융회사명] : null,
-        금융상품명: idx.금융상품명 >=0 ? cols[idx.금융상품명] : null,
-        상품판매중단일자: idx.상품판매중단일자 >=0 ? cols[idx.상품판매중단일자] : null,
-        등록일: idx.등록일 >=0 ? cols[idx.등록일] : null,
-      });
-    }
-    return rows;
-  } catch {
-    return [];
-  }
-}
-
-export async function GET() {
+export async function GET(req: Request) {
   try {
     let data: any[] = [];
     try {
       data = await fetchAll();
     } catch {
-      // fallback to CSV if API or key is missing/failed
-      data = readCsvFallback();
+      // fallback to CSV if API or key is missing/failed (fs -> fetch)
+      const origin = new URL(req.url).origin;
+      const csvUrl = `${origin}/data/KDIC_예금자보호_금융상품_전체목록.csv`;
+      const res = await fetch(csvUrl, { cache: "no-store" });
+      
+      if (res.ok) {
+        const raw = await res.text();
+        const lines = raw.split(/[\r\n]+/).filter(Boolean);
+        if (lines.length > 1) {
+          const headers = lines[0].split(",");
+          const idx = {
+            금융회사명: headers.indexOf("금융회사명"),
+            금융상품명: headers.indexOf("금융상품명"),
+            상품판매중단일자: headers.indexOf("상품판매중단일자"),
+            등록일: headers.indexOf("등록일"),
+          };
+          const rows: any[] = [];
+          for (let i = 1; i < lines.length; i++) {
+            const cols = lines[i].split(",");
+            rows.push({
+              금융회사명: idx.금융회사명 >= 0 ? cols[idx.금융회사명] : null,
+              금융상품명: idx.금융상품명 >= 0 ? cols[idx.금융상품명] : null,
+              상품판매중단일자: idx.상품판매중단일자 >= 0 ? cols[idx.상품판매중단일자] : null,
+              등록일: idx.등록일 >= 0 ? cols[idx.등록일] : null,
+            });
+          }
+          data = rows;
+        }
+      }
     }
     return NextResponse.json(data, { status: 200 });
   } catch (e: any) {
+    console.error("Error in products route:", e);
     return NextResponse.json({ error: e?.message ?? "unknown" }, { status: 500 });
   }
 }

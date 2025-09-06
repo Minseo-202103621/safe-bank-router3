@@ -1,0 +1,6 @@
+license,institution,product_name,protected,financial_tier
+은행A은행 라이선스,은행A,요구불예금,true,1
+은행A은행 라이선스,은행A,정기예금 12M(복리),true,1
+은행B은행 라이선스,은행B,외화예금,true,1
+저축은행C 라이선스,저축은행C,정기예금 12M,true,2
+증권D 라이선스,증권D,투자상품,false,3
