@@ -1,0 +1,8 @@
+[
+  { "id": "A1", "institution": "은행A", "license": "은행A은행 라이선스", "type": "demand", "currency": "KRW", "balance": 32000000 },
+  { "id": "A2", "institution": "은행A", "license": "은행A은행 라이선스", "type": "term", "currency": "KRW", "balance": 20000000, "term": 12 },
+  { "id": "B1", "institution": "은행B", "license": "은행B은행 라이선스", "type": "fx_deposit", "currency": "USD", "balance": 15000, "fxRate": 1400 },
+  { "id": "C1", "institution": "저축은행C", "license": "저축은행C 라이선스", "type": "trust_protected", "currency": "KRW", "balance": 18000000 },
+  { "id": "D1", "institution": "증권D", "license": "증권D 라이선스", "type": "investment", "currency": "KRW", "balance": 12000000 },
+  { "id": "E1", "institution": "은행E", "license": "은행E은행 라이선스", "type": "demand", "currency": "KRW", "balance": 14500000 }
+]
