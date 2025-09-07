@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
-// import { promises as fs } from "fs"; // fs 모듈 삭제
-// import path from "path"; // path 모듈 삭제
+import { headers } from "next/headers";
 
-/* ===== types (기존과 동일) ===== */
+/* ---- 런타임/캐시 플래그: 정적화 방지 ---- */
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
+/* ===== types ===== */
 type Account = {
   id: string;
   institution: string;
@@ -27,9 +31,8 @@ type CoverageRow = {
 };
 type CoverageTotals = { eligible:number; protected:number; excess:number; nonProtected:number; tier1:number; tier2:number };
 
-/* ===== helpers (기존과 동일) ===== */
+/* ===== helpers ===== */
 const stripBOM = (s:string)=>s.replace(/^\uFEFF/,"");
-const KRW = (n:number)=>n|0;
 const key = (s:string)=>String(s||"").toLowerCase().replace(/\s+/g,"").replace(/[(){}\[\]·,\-_/]/g,"");
 
 function parseCsv(text: string): string[][] {
@@ -53,7 +56,6 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-// ⛔️ fs.readFile 대신 fetch를 사용하도록 변경
 async function loadKDIC(origin: string) {
   const csvUrl = `${origin}/data/kdic_products.csv`;
   const res = await fetch(csvUrl, { cache: "no-store" });
@@ -64,6 +66,7 @@ async function loadKDIC(origin: string) {
   const header = rows[0]?.map(h=>h.trim()) ?? [];
   const idxInst = header.findIndex(h=>/금융회사명/.test(h));
   const idxProd = header.findIndex(h=>/금융상품명/.test(h));
+
   const set = new Set<string>();
   for (let i=1;i<rows.length;i++){
     const cols = rows[i];
@@ -89,19 +92,23 @@ function toKRW(a: Account) {
 /* ===== handler ===== */
 export async function GET(req: Request) {
   try {
-    const limit = Number(process.env.COVERAGE_LIMIT ?? 50_000_000); // 5천만원으로 수정
-    const origin = new URL(req.url).origin;
+    const limit = Number(process.env.COVERAGE_LIMIT ?? 50_000_000); // 기본 5천만
 
-    // 1) KDIC 카탈로그 세트 (fetch로 가져오기)
+    // ✅ 현재 배포의 origin 계산 (프록시/커스텀도메인 대응)
+    const h = headers();
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    const host  = h.get("x-forwarded-host") ?? h.get("host");
+    const origin = `${proto}://${host}`;
+
+    // 1) KDIC 카탈로그
     const kd = await loadKDIC(origin);
 
-    // 2) mydata 호출 (Vercel 환경변수 NEXT_PUBLIC_BASE_URL 필요)
-    const base = process.env.NEXT_PUBLIC_BASE_URL || "https://safe-bank-router3-f50u2yt0f-minseos-projects-001071f6.vercel.app/";
-    const r = await fetch(`${base}/api/mydata`, { cache: "no-store" });
+    // 2) mydata는 동일 배포의 라우트를 직접 호출 (하드코딩/ENV 제거)
+    const r = await fetch(`${origin}/api/mydata`, { cache: "no-store" });
+    if (!r.ok) throw new Error(`/api/mydata failed: ${r.status}`);
     const accounts: Account[] = (await r.json()) ?? [];
 
-    // ... 이후 계산 로직은 기존과 동일 ...
-    // 3) 보호/비보호 라벨링
+    // 3) 보호/비보호 라벨링 집계
     const byLicense = new Map<string, CoverageRow>();
     for (const a of accounts) {
       const lic = a.license || `${a.institution} 라이선스`;
@@ -147,6 +154,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ rows: [...byLicense.values()], totals }, { status: 200 });
   } catch (e) {
     console.error("Error in coverage route:", e);
-    return NextResponse.json({ rows: [], totals: { eligible:0, protected:0, excess:0, nonProtected:0, tier1:0, tier2:0 } }, { status: 500 });
+    return NextResponse.json(
+      { rows: [], totals: { eligible:0, protected:0, excess:0, nonProtected:0, tier1:0, tier2:0 } },
+      { status: 500 }
+    );
   }
 }
