@@ -338,17 +338,17 @@ export default function DemoApp() {
                 </ul>
                 <div className="mt-4 grid grid-cols-3 gap-3 text-center">
                   <div>
-                    <div className="text-2xl font-semibold text-slate-900">
+                    <div className="text-xl font-semibold text-slate-900">
                       {pct(adjusted.totals.protected, adjusted.totals.eligible + adjusted.totals.nonProtected)}%
                     </div>
                     <div className="text-xs text-slate-500">보호율(전체)</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-semibold text-amber-700">{KRW(adjusted.totals.excess)}</div>
+                    <div className="text-xl font-semibold text-amber-700">{KRW(adjusted.totals.excess)}</div>
                     <div className="text-xs text-slate-500">초과금액</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-semibold text-rose-700">{KRW(adjusted.totals.nonProtected)}</div>
+                    <div className="text-xl font-semibold text-rose-700">{KRW(adjusted.totals.nonProtected)}</div>
                     <div className="text-xs text-slate-500">비보호(투자성)</div>
                   </div>
                 </div>
