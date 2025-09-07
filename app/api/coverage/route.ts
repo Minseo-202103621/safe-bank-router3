@@ -57,7 +57,7 @@ function parseCsv(text: string): string[][] {
 async function loadKDIC() {
   const filePath = process.env.CATALOG_CSV
     ? (path.isAbsolute(process.env.CATALOG_CSV) ? process.env.CATALOG_CSV : path.join(process.cwd(), process.env.CATALOG_CSV))
-    : path.join(process.cwd(), "data", "KDIC_예금자보호_금융상품_전체목록.csv");
+    : path.join(process.cwd(), "data", "kdic_products.csv");
   const raw = await fs.readFile(filePath, "utf8");
   const rows = parseCsv(raw);
   const header = rows[0]?.map(h=>h.trim()) ?? [];

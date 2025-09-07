@@ -56,7 +56,7 @@ function inferCurrency(name: string): "KRW" | "USD" {
 
 /* ============== KDIC 카탈로그 로딩 (fs -> fetch로 변경) ============== */
 async function loadCatalogFromCsv(origin: string): Promise<{ institution: string; product_name: string }[]> {
-  const csvUrl = `${origin}/data/KDIC_예금자보호_금융상품_전체목록.csv`;
+  const csvUrl = `${origin}/data/kdic_products.csv`;
   const res = await fetch(csvUrl, { cache: "no-store" });
   if (!res.ok) {
     console.error(`Failed to fetch CSV: ${res.status}`);

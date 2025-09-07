@@ -84,7 +84,7 @@ export async function GET(req: Request) {
     } catch {
       // fallback to CSV if API or key is missing/failed (fs -> fetch)
       const origin = new URL(req.url).origin;
-      const csvUrl = `${origin}/data/KDIC_예금자보호_금융상품_전체목록.csv`;
+      const csvUrl = `${origin}/data/kdic_products.csv`;
       const res = await fetch(csvUrl, { cache: "no-store" });
       
       if (res.ok) {
